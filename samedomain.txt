@@ -1,0 +1,188 @@
+J Walker
+M Goodwin
+
+
+SameDomain Cookie Flag
+======================
+
+Abstract
+--------
+
+This document defines the SameDomain Cookie attribute, a mitigation against cross-site request forgery (CSRF) attacks. This attribute indicates to HTTP user agents that cookie transmission should be restricted; the cookie should be sent only with requests initiated from documents with URIs that match the cookie's host and secure attributes.  Requests initiated from documents with URIs which do not match should result in an HTTP request without any of the information contained in the SameDomain cookie. In the case of Origin cookies [ORIGIN_COOKIE], the user agent should sent the cookie only if both the initiating and request origins match the cookie origin.
+
+The SameDomain cookie attribute can be thought of as 'referrer checking' done by the browser.
+
+This document adds to [RFC6265].
+
+Status of This Memo
+-------------------
+
+This is a work in progress.
+
+
+Terminology
+-----------
+
+* Initiating URI: The URI of the document from which a request is initiated. For cases where the request is not initiated from a document (for example browser home pages and navigation from bookmarks or user entered URLs) assume there is no Initiating URI.
+
+* Request URI: The URI of the resource being requested.
+
+
+Rules
+-----
+
+# SameDomain:match
+
+In addition to checking the cookie rules against the request URI, the browser must check the cookie rules against the initiating URI. All rules are included including the path.
+
+# SameDomain
+
+In addition to checking the cookie rules against the request URI, all details of the initiating URI are checked with the exception of the path.
+
+Future Enhancements
+-------------------
+
+It is likely there are scenarios in which refinement of the rules would be useful:
+
+Example 1:
+A site implementing SameDomain cookies may want to allow cookies to be sent for HTTPS resources by documents served over HTTP:
+* An existing banking site has brochureware at http://www.example.com and an online banking application at https://accounts.example.com
+* On login, the online banking application sets a SameDomain session cookie on the example.com domain with the Secure attribute set.
+* An offer, described in static content on http://www.example.com/sparklyoffer links to https://accounts.example.com/offers/signup
+* As the initiating URI (http://www.example.com/sparklyoffer) is an HTTP URI, the Secure flag would cause SameDomain to prevent the cookie from being sent.
+* Relaxation of the Secure check on the initiating URI could allow use of SameDomain in this case, providing a degree of protection while the bank builds an HTTPS only site.
+
+
+Example 2:
+A site implementing SameDomain cookies may want to allow navigation from a page on a different subdomain to an URI expecting a SameDomain cookie:
+* Our bank, above, has now built an HTTPS only site, but wishes to restrict the session cookie to the accounts.example.com domain to prevent potential attacks from https://forums.example.com and https://support.example.com
+* Changing the domain of the session cookie would prevent existing links from https://www.example.com/ to https://accounts.example.com from working
+* Whitelisting www.example.com would ease integration with existing systems yet still enhance security by preventing attacks from other, less trusted, subdomains.
+
+
+Syntax
+------
+
+RFC 6265 specifies the syntax for the Set-Cookie header, which is extended by this proposal as follows:
+
+cookie-av         = expires-av / max-age-av / domain-av /
+                    path-av / secure-av / httponly-av /
+                    samedomain-av / extension-av
+
+samedomain-av     = "SameDomain" ["=" samedomain-value]
+
+samedomain-value  = *(',' SP samedomain-directive)
+
+samedomain-directive = "match" / samedomain-extension
+
+samedomain-extension = <any CHAR except CTLs, ";" and ','>
+
+Alternatively the SameDomain flag can be seen as an implementation of 'extension-av'.
+
+
+Example
+-------
+
+Set-Cookie: name=value; SameDomain
+
+Set-Cookie: name=value; SameDomain=match
+
+Set-Cookie: name=value; SameDomain=match, <samedomain-extension>
+
+
+Side Effects and Limitations
+----------------------------
+
+This section is not normative.
+
+The SameDomain attribute would have the desirable side-effect of preventing reflected XSS attacks in some circumstances. Many XSS flaws exist in functionality protected by cookie based authorization; in these cases:
+* An attacker discovers an XSS flaw in an application feature which is only available to authenticated users
+* The attacker forges a request (or causes the victim to visit a link) containing the XSS payload
+* The initiating URI is ether off domain (forum, malicious web page, etc.) or non-existent (IRC, Instant message) so SameDomain rules ensure this cookie is not sent
+* Because the cookie is not sent, the server treats the request as unauthenticated, access to vulnerable resource is denied and the payload is not reflected.
+
+The SameDomain attribute does not prevent internal attacks as a result of XSS flaws or GET CSRF via links and embedded images in on-domain user provided content.  Such functionality is already known to increase the attack surface of an application.
+
+
+Alternative Techniques
+----------------------
+
+This section is not normative.
+
+The reaction to many people when faced with a CSRF attack is to implement 'referrer checking' in the server, and ask if this is a sufficient measure [OWASP] [STACKOVERFLOW] [CGISEC]. Checking the 'referer' header is insufficient for several reasons:
+
+* Systems like web filters, proxies, parental control software, etc, filter out the referer header for privacy and other reasons.
+* Browsers omit the referer header in an HTTP request made from a page served over HTTPS [RFC2616]
+* Browsers omit the referer header when the referring link is marked rel="noreferrer" [HTML5]
+* Older plug-ins have been known to cause problems [SECUNIA]
+
+The origin header was proposed to overcome some of the difficulties with referrer checking; whilst this is a sound idea, in practice this provides little benefit for a site without universal adoption (requiring an origin header would deny service to older or non compliant user agents).
+
+Efforts have been made to  resolve CSRF using logic within web applications (both by application and framework developers); such solutions are of variable quality with some of the better solutions having falling victim to attack [DJANGO-CSRF] [FLASH-307].
+
+For reasons already discussed, 'Referrer checking' in the server is insufficient for CSRF protection, however, if the same checking was done by the browser before the request was sent then the issues above could be avoided.
+
+
+Related work
+------------
+
+This section is not normative.
+
+Origin Header:
+
+The HTTP Origin Header proposal [ORIGIN-HEADER] describes a mechanism for 
+
+Origin cookie proposal: 
+
+The Origin Cookie Proposal [ORIGIN-COOKIE]
+
+References
+----------
+
+### Normative References
+
+[HTML5] http://dev.w3.org/html5/spec/Overview.html#resource-metadata-management
+
+[RFC6265] https://tools.ietf.org/html/rfc6265
+
+[RFC2616] https://tools.ietf.org/html/rfc2616
+
+[ORIGIN-COOKIE] http://tools.ietf.org/html/draft-abarth-cake-01
+
+[ORIGIN-HEADER] http://tools.ietf.org/id/draft-abarth-origin-03.html
+
+
+### Informative References
+
+[OWASP] https://www.owasp.org/index.php/Cross-Site_Request_Forgery_%28CSRF%29_Prevention_Cheat_Sheet#Checking_Referer_Header
+
+[STACKOVERFLOW] http://stackoverflow.com/questions/1413930/is-checking-the-referrer-enough-to-protect-against-a-csrf-attack
+
+[CGISEC] http://www.cgisecurity.com/csrf-faq.html#referer
+
+[SECUNIA] https://secunia.com/advisories/22467/
+
+[DJANGO-CSRF] https://docs.djangoproject.com/en/dev/ref/contrib/csrf/#limitations
+
+[FLASH-307] http://lists.webappsec.org/pipermail/websecurity_lists.webappsec.org/2011-February/007533.html
+
+
+Thoughts and Questions
+----------------------
+
+### Should the SameDomain attribute include a list of allowed domains?
+
+It might be possible to formulate the SameDomain attribute to allow a list of domains to which the cookie should be sent. The simpler version has been specified for 3 reasons:
+* It's simpler
+* The simple version does not prevent the extended version being specified later
+* ISPs and Web Server vendors could, if they chose, implement the simpler SameDomain flag by default however they more complex version may require server side configuration
+
+### Should we prevent HTTP Authorization headers from being sent when SameDomain cookie filtering is happening?
+
+This sounds like a nice idea, a request has a 'potentially forged' status and we try to limit the possible damage be preventing any identifying information from being sent. However if we're purely using http-auth (i.e. trying to be RESTful) then we're not likely to have a cookie. And setting a cookie as a way to turning on forgery protection seems strange. Also on an intranet, or any system with sub-domains, then there is the potential for someone else to affect the way your app interacts with your clients.
+
+### The general form of this problem is forced-browsing. What other things could we do that fix problems caused by forced browsing and are there any forced browsing vectors that could bypass these measures?
+
+Link shortener services could have a header that says 'be on your guard', as could anything that accepts user submitted links.
+
+Often email programs don't show remote images
